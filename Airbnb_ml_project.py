@@ -19,19 +19,26 @@ from sklearn.dummy import DummyClassifier
 from sklearn.metrics import roc_curve
 from sklearn.neighbors import KNeighborsRegressor
 
-
-
-
-def setClassValues(ratings, price):
+def setClassValues(price, ratings):
     y = np.array([1] * len(ratings))
     for i in range(len(ratings)):
         if ratings[i] <= 90 and price[i] <= 150:
             y[i] = -1
     return y
 
-
-
-
+def setNaN(ratings):
+    booleanRatings = np.isnan(ratings)
+    print(booleanRatings)
+    for i in range(len(booleanRatings)):
+        if booleanRatings[i] == True:
+            ratings[i] = 0
+    average = ratings.mean()
+    print(average)
+    for j in range(len(ratings)):
+        if ratings[j] == 0:
+            ratings[j] = average
+        print(ratings[j])
+    return ratings
 
 def main():
     #dublin_listings = np.genfromtxt("C:/Users/ruair/Documents/4thYear/ml/assignments/group_assignment/datasets/airbnb/dublin_listings.csv",delimiter=',')
@@ -57,15 +64,21 @@ def main():
         amenities[x] = len(np.array((amenities_pd[x].replace('[','').replace(']','')).split(',')))
     amenities.astype(int)
 
+    X = np.column_stack((prices, review_scores))
 
     print(prices.shape)
     print(amenities.shape)
     print(is_superhost.shape)
     print(review_scores.shape)
 
+    review_scores = setNaN(review_scores)
     y = setClassValues(review_scores, prices)
     print(y)
 
+    review_scores = review_scores.reshape(-1,1)
+    model = LogisticRegression(penalty = 'none', solver='lbfgs').fit(review_scores, prices)
+    ypred = model.predict(review_scores)
+    print(ypred)
 
     plt.rc('font', size=14)
     plt.rcParams['figure.constrained_layout.use'] = True
