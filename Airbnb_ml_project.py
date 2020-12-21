@@ -10,14 +10,15 @@ import random
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso
 from sklearn.svm import LinearSVC
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from sklearn.dummy import DummyClassifier
 from sklearn.metrics import roc_curve
 from sklearn.neighbors import KNeighborsRegressor
+from functools import partial
 
 def setClassValues(price, ratings):
     y = np.array([1] * len(ratings))
@@ -64,6 +65,52 @@ def linearRegCrossVal(features, target, q):
     print(std_arr)
     plt.errorbar(q, mean_arr, yerr = std_arr)
     plt.show()
+
+def ridge_crossval_C(feature_matrix, target_vector, c_values):
+    mean_arr = []
+    std_arr = []
+    for c in c_values:
+            model = Ridge(alpha = 1/(2*c))
+            scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+            mean_arr.append(np.mean(np.negative(scores)))
+            std_arr.append(np.std(np.negative(scores)))
+    return mean_arr, std_arr
+
+def lasso_crossval_C(feature_matrix, target_vector, c_values):
+    mean_arr = []
+    std_arr = []
+    for c in c_values:
+            model = Lasso(alpha = 1/(2*c))
+            scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+            mean_arr.append(np.mean(np.negative(scores)))
+            std_arr.append(np.std(np.negative(scores)))
+    return mean_arr, std_arr
+
+def knn_crossval_n(feature_matrix, target_vector, num_neighbours):
+    mean_arr = []
+    std_arr = []
+    for n in num_neighbours:
+            model = KNeighborsRegressor(n_neighbors=n)
+            scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+            mean_arr.append(np.mean(np.negative(scores)))
+            std_arr.append(np.std(np.negative(scores)))
+    return mean_arr, std_arr
+
+def knn_crossval_gamma(feature_matrix, target_vector, num_neighbours, gamma):
+    mean_arr = []
+    std_arr = []
+    for g in gamma:
+            model = KNeighborsRegressor(n_neighbors=num_neighbours, weights=partial(gaussian_kernel,g))
+            scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+            mean_arr.append(np.mean(np.negative(scores)))
+            std_arr.append(np.std(np.negative(scores)))
+    return mean_arr, std_arr
+
+def gaussian_kernel(gamma, distances):
+    weights = np.exp(-gamma * (distances**2))
+    return weights/np.sum(weights)
+
+
 
 def LinReg(features, target, review_score, super_host, facilities):
     model = LinearRegression().fit(features, target)
@@ -174,7 +221,35 @@ def main():
     linearRegCrossVal(review_superhost_augment, prices, q)
 
     
+    #use review_scores, is_superhost, amenities as features
 
+    #Ridge regression varying C
+    c_values = [0.01, 0.1, 1, 10]
+    ridge_means, ridge_stds = ridge_crossval_C(X,prices,c_values)
+
+    #lasso regression varying C
+    lasso_means, lasso_stds = lasso_crossval_C(X,prices,c_values)
+
+    #knn regression varying number of neighbours and gaussian kernel weights
+    n_neighbours = [2,5,10,25,50]
+    knn_means, knn_stds = knn_crossval_n(X,prices,n_neighbours)
+
+    gamma = [0,1,5,10,25]
+    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(X,prices,25,gamma)
+
+    #compare MSE mean and standard deviation of models
+    print("RIDGE MODEL:")
+    print("MSE mean:" + str(ridge_means))
+    print("MSE standard dev:" + str(ridge_means) + "\n\n")
+    print("LASSO MODEL:")
+    print("MSE mean:" + str(lasso_means))
+    print("MSE standard dev:" + str(lasso_means) + "\n\n")
+    print("KNN MODEL (VARY NUM NEIGHBOURS):")
+    print("MSE mean:" + str(knn_means))
+    print("MSE standard dev:" + str(knn_means) + "\n\n")
+    print("KNN MODEL (VARY GAUSSIAN WEIGHTS):")
+    print("MSE mean:" + str(knn_gamma_means))
+    print("MSE standard dev:" + str(knn_gamma_means) + "\n\n")
     
 
 
@@ -190,3 +265,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
