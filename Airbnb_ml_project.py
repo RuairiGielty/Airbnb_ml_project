@@ -72,16 +72,6 @@ def linearRegCrossVal(features, target, q):
     plt.errorbar(q, mean_arr, yerr = std_arr)
     plt.show()
 
-def kernelridge_crossval_gamma(feature_matrix, target_vector, gamma_values):
-    mean_arr = []
-    std_arr = []
-    for g in gamma_values:
-        model = KernelRidge(kernel='rbf', gamma=g)
-        scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
-        mean_arr.append(np.mean(np.negative(scores)))
-        std_arr.append(np.std(np.negative(scores)))
-    return mean_arr, std_arr
-
 def ridge_crossval_C(feature_matrix, target_vector, c_values):
     mean_arr = []
     std_arr = []
@@ -265,23 +255,23 @@ def main():
 
     #Ridge regression varying C
     c_values = [0.001, 0.01, 0.1, 1, 10, 100]
-    ridge_means, ridge_stds = ridge_crossval_C(X,prices,c_values)
+    ridge_means, ridge_stds = ridge_crossval_C(xTrain,yTrain,c_values)
 
     #Ridge regression varying poly features
     q_values = [2,3,4]
-    ridge_q_means, ridge_q_stds = ridge_crossval_q(X,prices,q_values)
+    ridge_q_means, ridge_q_stds = ridge_crossval_q(xTrain,yTrain,q_values)
 
     #lasso regression varying C
-    lasso_means, lasso_stds = lasso_crossval_C(X,prices,c_values)
+    lasso_means, lasso_stds = lasso_crossval_C(xTrain,yTrain,c_values)
 
 
 
     #knn regression varying number of neighbours and gaussian kernel weights
     n_neighbours = [2,5,10,25,50,100,200]
-    knn_means, knn_stds = knn_crossval_n(X,prices,n_neighbours)
+    knn_means, knn_stds = knn_crossval_n(xTrain,yTrain,n_neighbours)
 
     gamma = [0,1,5,10,25]
-    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(X,prices,100,gamma)
+    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(xTrain,yTrain,100,gamma)
 
     #compare MSE mean and standard deviation of models
     print("RIDGE MODEL (vary c):")
@@ -302,17 +292,27 @@ def main():
     
     #BASELINE - Dummy Regressor
     dummy_model = DummyRegressor(strategy="mean")
-    scores = cross_val_score(dummy_model, X, prices, cv = 5, scoring = "neg_mean_squared_error")
+    scores = cross_val_score(dummy_model, xTrain, yTrain, cv = 5, scoring = "neg_mean_squared_error")
     print("DUMMY REGRESSOR" +"\n")
     print("MSE mean: " +str(np.negative(scores.mean())))
     print("MSE std: " +str(np.negative(scores.std()))+"\n\n")
 
 
-    #kernelised ridge regression varying gamma
-    kr_means, kr_stds = kernelridge_crossval_gamma(X,prices,gamma)
-    print("KernelRidge MODEL (VARY GAUSSIAN WEIGHTS):")
-    print("MSE mean:" + str(kr_means))
-    print("MSE standard dev:" + str(kr_stds) + "\n\n")
+    #PREDICTIONS USING TEST DATA
+    ridge_model = Ridge(alpha = 1/(2*0.01)).fit(xTrain, yTrain)
+    ypred = ridge_model.predict(xTest)
+    ridge_mse = mean_squared_error(yTest, ypred)
+    print(np.mean(ridge_mse))
+
+    dummy_model = DummyRegressor(strategy="mean").fit(xTrain, yTrain)
+    dummy_ypred = dummy_model.predict(xTest)
+    dummy_mse = mean_squared_error(yTest, dummy_ypred)
+    print(np.mean(dummy_mse))
+
+
+
+
+
     # plt.rc('font', size=14)
     # plt.rcParams['figure.constrained_layout.use'] = True
     # plt.scatter(review_scores, prices, 1, color='red')
