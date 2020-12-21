@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, normalize
 from sklearn import linear_model
 from sklearn.linear_model import Ridge
 import random
@@ -20,6 +20,12 @@ from sklearn.metrics import roc_curve
 from sklearn.neighbors import KNeighborsRegressor
 from functools import partial
 
+def normalise(list):
+    mean = np.mean(list)
+    std = np.std(list)
+    for i in range(len(list)):
+        list[i] = (list[i] - mean)/std
+
 def setClassValues(price, ratings):
     y = np.array([1] * len(ratings))
     for i in range(len(ratings)):
@@ -34,16 +40,13 @@ def getPoly(degree, X, targetVal):
 
 def set_review_scores_NaN(ratings):
     booleanRatings = np.isnan(ratings)
-    print(booleanRatings)
     for i in range(len(booleanRatings)):
         if booleanRatings[i] == True:
             ratings[i] = 0
     average = ratings.mean()
-    print(average)
     for j in range(len(ratings)):
         if ratings[j] == 0:
             ratings[j] = average
-        #print(ratings[j])
     return ratings
 
 def featureCrossVal(features, target):
@@ -75,6 +78,18 @@ def ridge_crossval_C(feature_matrix, target_vector, c_values):
             mean_arr.append(np.mean(np.negative(scores)))
             std_arr.append(np.std(np.negative(scores)))
     return mean_arr, std_arr
+
+def ridge_crossval_q(feature_matrix, target_vector, q_values):
+        mean_arr = []
+        std_arr = []
+        for q in q_values:
+            poly = PolynomialFeatures(q)
+            poly_feature_matrix = poly.fit_transform(feature_matrix)
+            model = Ridge()
+            scores = cross_val_score(model, poly_feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+            mean_arr.append(np.mean(np.negative(scores)))
+            std_arr.append(np.std(np.negative(scores)))
+        return mean_arr, std_arr
 
 def lasso_crossval_C(feature_matrix, target_vector, c_values):
     mean_arr = []
@@ -147,11 +162,15 @@ def main():
     #dublin_listings = np.genfromtxt("C:/Users/ruair/Documents/4thYear/ml/assignments/group_assignment/datasets/airbnb/dublin_listings.csv",delimiter=',')
     dublin_listings = pd.read_csv("dublin_listings.csv",delimiter=',')
 
+
+    #EXTRACT FEATURES FROM CSV
+
     #prices column to numpy array
     prices_pd = pd.to_numeric(dublin_listings['price'], errors='coerce')
     prices = prices_pd.to_numpy()
     np.reshape(prices,(-1,1))
     prices = prices[:,np.newaxis]
+    normalise(prices)
 
     #host_is_superhost string column to numpy array of bools
     is_superhost = dublin_listings['host_is_superhost'].to_numpy()
@@ -159,15 +178,14 @@ def main():
     is_superhost[is_superhost == 'f'] = 0
     np.reshape(is_superhost,(-1,1))
     is_superhost = is_superhost[:,np.newaxis]
+    normalise(is_superhost)
 
     #review_scores_rating to numpy array
     review_scores = dublin_listings['review_scores_rating'].to_numpy()
     np.reshape(review_scores,(-1,1))
     review_scores = review_scores[:,np.newaxis]
-    #print((review_scores == np.nan))
-    #review_scores1 = set_review_scores_NaN(review_scores)
-    #ind = np.where(review_scores1 == 74.36976803)
-    #print(np.array_equal(review_scores[ind],review_scores1[ind]))
+    review_scores = set_review_scores_NaN(review_scores)
+    normalise(review_scores)
 
     #amenities to numpy array storing number of amenities for each listing
     amenities_pd = dublin_listings['amenities']
@@ -179,26 +197,34 @@ def main():
     #reshape to be compatible with sklearn functions
     np.reshape(amenities,(-1,1))
     amenities = amenities[:,np.newaxis]
+    normalise(amenities)
+
+
+
+
 
     #putting all features in a column stack.
-    review_scores = set_review_scores_NaN(review_scores)
     review_superhost_augment = review_scores
     review_superhost_augment[np.logical_not(is_superhost.astype(int))] -= 20
 
     #prices, review_scores, is_superhost, amenities = removeOutliers(prices, review_scores, is_superhost, amenities)
 
-    #creating different sets of features.
+
+
+    #CREATE DIFFERENT COMBINATIONS OF FEATURES
+
     #review_scores + is_superhost
     rs_and_is = np.column_stack((review_scores, is_superhost))
     #review_scores + amenities
     rs_and_am = np.column_stack((review_scores, amenities))
     #all three
     X = np.column_stack((review_scores, is_superhost, amenities))
+    
 
     augment = np.column_stack((review_superhost_augment,amenities))
     
 
-    fit = getPoly(1, X, prices)
+
     xTrain, xTest, yTrain, yTest = train_test_split(X, prices, test_size = 0.2, random_state = 0)
     #linearRegCrossVal(xTrain, yTrain, q)
     #LinReg(review_scores, prices, review_scores, is_superhost, amenities, fit)
@@ -218,38 +244,48 @@ def main():
     plot_error(lists, feature_mean_arr, feature_std_arr, 'red', 'grey', 'title', 'xlabel', 'ylabel')
     plt.show()
 
-    linearRegCrossVal(review_superhost_augment, prices, q)
+    linearRegCrossVal(X, prices, q)
 
     
+
     #use review_scores, is_superhost, amenities as features
 
     #Ridge regression varying C
-    c_values = [0.01, 0.1, 1, 10]
+    c_values = [0.001, 0.01, 0.1, 1, 10, 100]
     ridge_means, ridge_stds = ridge_crossval_C(X,prices,c_values)
+
+    #Ridge regression varying poly features
+    q_values = [2,3,4]
+    ridge_q_means, ridge_q_stds = ridge_crossval_q(X,prices,q_values)
 
     #lasso regression varying C
     lasso_means, lasso_stds = lasso_crossval_C(X,prices,c_values)
 
+
+
     #knn regression varying number of neighbours and gaussian kernel weights
-    n_neighbours = [2,5,10,25,50]
+    n_neighbours = [2,5,10,25,50,100,200]
     knn_means, knn_stds = knn_crossval_n(X,prices,n_neighbours)
 
     gamma = [0,1,5,10,25]
-    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(X,prices,25,gamma)
+    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(X,prices,100,gamma)
 
     #compare MSE mean and standard deviation of models
-    print("RIDGE MODEL:")
+    print("RIDGE MODEL (vary c):")
     print("MSE mean:" + str(ridge_means))
-    print("MSE standard dev:" + str(ridge_means) + "\n\n")
+    print("MSE standard dev:" + str(ridge_stds) + "\n\n")
+    print("RIDGE MODEL (vary q):")
+    print("MSE mean:" + str(ridge_q_means))
+    print("MSE standard dev:" + str(ridge_q_stds) + "\n\n")
     print("LASSO MODEL:")
     print("MSE mean:" + str(lasso_means))
-    print("MSE standard dev:" + str(lasso_means) + "\n\n")
+    print("MSE standard dev:" + str(lasso_stds) + "\n\n")
     print("KNN MODEL (VARY NUM NEIGHBOURS):")
     print("MSE mean:" + str(knn_means))
-    print("MSE standard dev:" + str(knn_means) + "\n\n")
+    print("MSE standard dev:" + str(knn_stds) + "\n\n")
     print("KNN MODEL (VARY GAUSSIAN WEIGHTS):")
     print("MSE mean:" + str(knn_gamma_means))
-    print("MSE standard dev:" + str(knn_gamma_means) + "\n\n")
+    print("MSE standard dev:" + str(knn_gamma_stds) + "\n\n")
     
 
 
@@ -265,5 +301,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
