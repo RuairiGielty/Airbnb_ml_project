@@ -10,7 +10,7 @@ import random
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.svm import LinearSVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
@@ -26,6 +26,11 @@ def setClassValues(price, ratings):
             y[i] = -1
     return y
 
+def getPoly(degree, X, targetVal):
+    poly = PolynomialFeatures(degree)
+    fit = poly.fit_transform(X)
+    return fit
+
 def set_review_scores_NaN(ratings):
     booleanRatings = np.isnan(ratings)
     print(booleanRatings)
@@ -37,10 +42,61 @@ def set_review_scores_NaN(ratings):
     for j in range(len(ratings)):
         if ratings[j] == 0:
             ratings[j] = average
-        print(ratings[j])
+        #print(ratings[j])
     return ratings
 
+def featureCrossVal(features, target):
+    model = LinearRegression().fit(features, target)
+    scores = cross_val_score(model, features, target, cv = 10, scoring ="neg_mean_squared_error")
+    return np.negative(scores.mean()),np.negative(scores.std())
+
+def linearRegCrossVal(features, target, q):
+    mean_arr = []
+    std_arr = []
+    for i in range(len(q)):
+        poly = PolynomialFeatures(q[i])
+        poly_mat = poly.fit_transform(features)
+        model = LinearRegression()
+        scores = cross_val_score(model, poly_mat, target, cv = 5, scoring= "neg_mean_squared_error")
+        mean_arr.append(np.negative(scores.mean()))
+        std_arr.append(np.negative(scores.std()))
+    print(mean_arr)
+    print(std_arr)
+    plt.errorbar(q, mean_arr, yerr = std_arr)
+    plt.show()
+
+def LinReg(features, target, review_score, super_host, facilities):
+    model = LinearRegression().fit(features, target)
+
+    #lineIntercept = -((model.intercept_ *1) + (model.coef_[0][0] * review_score) + (model.coef_[0][2] * facilities))/model.coef_[0][1]
+    plt.scatter(features[:,0], target, s = 2**2)
+    plt.plot(features[:,0], model.predict(features), color = 'red', linewidth = 0.5)
+    plt.show()
+
+def removeOutliers(prices, review_scores, is_superhost, amenities):
+    new_scores = []
+    new_host = []
+    new_amenities = []
+    new_prices = []
+    for i in range(len(prices)):
+        if prices[i] < 1999 or review_scores[i] == 74.37914512671794 :
+            new_prices.append(prices[i])
+            new_scores.append(review_scores[i])
+            new_host.append(is_superhost[i])
+            new_amenities.append(amenities[i])
+    return new_prices, new_scores, new_host, new_amenities
+
+def plot_error(cVals, mean, std, colors, lineColor, title, xLabel, yLabel):
+    plt.errorbar(cVals, mean, yerr=std, ecolor=colors, color = lineColor)
+    plt.title(title)
+    plt.xlabel(xLabel)
+    plt.ylabel(yLabel)
+
 def main():
+    q = np.array([1,2,3,4])
+    lists = np.array([1, 2, 3, 4])
+    feature_mean_arr = np.array([0] * 4)
+    feature_std_arr = np.array([0] * 4)
     #dublin_listings = np.genfromtxt("C:/Users/ruair/Documents/4thYear/ml/assignments/group_assignment/datasets/airbnb/dublin_listings.csv",delimiter=',')
     dublin_listings = pd.read_csv("dublin_listings.csv",delimiter=',')
 
@@ -77,14 +133,60 @@ def main():
     np.reshape(amenities,(-1,1))
     amenities = amenities[:,np.newaxis]
 
-    plt.rc('font', size=14)
-    plt.rcParams['figure.constrained_layout.use'] = True
-    plt.scatter(prices, review_scores, 1, color='red')
+    #putting all features in a column stack.
+    review_scores = set_review_scores_NaN(review_scores)
+    review_superhost_augment = review_scores
+    review_superhost_augment[np.logical_not(is_superhost.astype(int))] -= 20
 
-    plt.xlabel("price"); plt.ylabel("review score")
-    #plt.legend(["class 1","class -1"], prop={'size' : 10})
-    #plt.title("Dataset " + str(dataset_index) + " plot")
+    #prices, review_scores, is_superhost, amenities = removeOutliers(prices, review_scores, is_superhost, amenities)
+
+    #creating different sets of features.
+    #review_scores + is_superhost
+    rs_and_is = np.column_stack((review_scores, is_superhost))
+    #review_scores + amenities
+    rs_and_am = np.column_stack((review_scores, amenities))
+    #all three
+    X = np.column_stack((review_scores, is_superhost, amenities))
+
+    augment = np.column_stack((review_superhost_augment,amenities))
+    
+
+    fit = getPoly(1, X, prices)
+    xTrain, xTest, yTrain, yTest = train_test_split(X, prices, test_size = 0.2, random_state = 0)
+    #linearRegCrossVal(xTrain, yTrain, q)
+    #LinReg(review_scores, prices, review_scores, is_superhost, amenities, fit)
+    mean, std = featureCrossVal(review_scores, prices)
+    feature_mean_arr[0] = mean
+    feature_std_arr[0] = std
+    mean, std = featureCrossVal(rs_and_is, prices)
+    feature_mean_arr[1] = mean
+    feature_std_arr[1] = std
+    mean, std = featureCrossVal(rs_and_am, prices)
+    feature_mean_arr[2] = mean
+    feature_std_arr[2] = std
+    mean, std = featureCrossVal(review_superhost_augment, prices)
+    feature_mean_arr[3] = mean
+    feature_std_arr[3] = std
+
+    plot_error(lists, feature_mean_arr, feature_std_arr, 'red', 'grey', 'title', 'xlabel', 'ylabel')
     plt.show()
+
+    linearRegCrossVal(review_superhost_augment, prices, q)
+
+    
+
+    
+
+
+
+    # plt.rc('font', size=14)
+    # plt.rcParams['figure.constrained_layout.use'] = True
+    # plt.scatter(review_scores, prices, 1, color='red')
+
+    # plt.xlabel("price"); plt.ylabel("review score")
+    # #plt.legend(["class 1","class -1"], prop={'size' : 10})
+    # #plt.title("Dataset " + str(dataset_index) + " plot")
+    # plt.show()
 
 if __name__ == "__main__":
     main()
