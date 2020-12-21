@@ -7,6 +7,7 @@ from sklearn.preprocessing import PolynomialFeatures, normalize
 from sklearn import linear_model
 from sklearn.linear_model import Ridge
 import random
+from sklearn.kernel_ridge import KernelRidge
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -19,6 +20,8 @@ from sklearn.dummy import DummyClassifier
 from sklearn.metrics import roc_curve
 from sklearn.neighbors import KNeighborsRegressor
 from functools import partial
+from sklearn.dummy import DummyRegressor
+
 
 def normalise(list):
     mean = np.mean(list)
@@ -68,6 +71,16 @@ def linearRegCrossVal(features, target, q):
     print(std_arr)
     plt.errorbar(q, mean_arr, yerr = std_arr)
     plt.show()
+
+def kernelridge_crossval_gamma(feature_matrix, target_vector, gamma_values):
+    mean_arr = []
+    std_arr = []
+    for g in gamma_values:
+        model = KernelRidge(kernel='rbf', gamma=g)
+        scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
+        mean_arr.append(np.mean(np.negative(scores)))
+        std_arr.append(np.std(np.negative(scores)))
+    return mean_arr, std_arr
 
 def ridge_crossval_C(feature_matrix, target_vector, c_values):
     mean_arr = []
@@ -170,14 +183,16 @@ def main():
     prices = prices_pd.to_numpy()
     np.reshape(prices,(-1,1))
     prices = prices[:,np.newaxis]
+    prices = prices.astype(np.float32)
     normalise(prices)
-
+    print(prices)
     #host_is_superhost string column to numpy array of bools
     is_superhost = dublin_listings['host_is_superhost'].to_numpy()
     is_superhost[is_superhost == 't'] = 1
     is_superhost[is_superhost == 'f'] = 0
     np.reshape(is_superhost,(-1,1))
     is_superhost = is_superhost[:,np.newaxis]
+    is_superhost = is_superhost.astype(np.float32)
     normalise(is_superhost)
 
     #review_scores_rating to numpy array
@@ -185,6 +200,7 @@ def main():
     np.reshape(review_scores,(-1,1))
     review_scores = review_scores[:,np.newaxis]
     review_scores = set_review_scores_NaN(review_scores)
+    review_scores = review_scores.astype(np.float32)
     normalise(review_scores)
 
     #amenities to numpy array storing number of amenities for each listing
@@ -197,11 +213,8 @@ def main():
     #reshape to be compatible with sklearn functions
     np.reshape(amenities,(-1,1))
     amenities = amenities[:,np.newaxis]
+    amenities = amenities.astype(np.float32)
     normalise(amenities)
-
-
-
-
 
     #putting all features in a column stack.
     review_superhost_augment = review_scores
@@ -237,7 +250,7 @@ def main():
     mean, std = featureCrossVal(rs_and_am, prices)
     feature_mean_arr[2] = mean
     feature_std_arr[2] = std
-    mean, std = featureCrossVal(review_superhost_augment, prices)
+    mean, std = featureCrossVal(X, prices)
     feature_mean_arr[3] = mean
     feature_std_arr[3] = std
 
@@ -287,9 +300,19 @@ def main():
     print("MSE mean:" + str(knn_gamma_means))
     print("MSE standard dev:" + str(knn_gamma_stds) + "\n\n")
     
+    #BASELINE - Dummy Regressor
+    dummy_model = DummyRegressor(strategy="mean")
+    scores = cross_val_score(dummy_model, X, prices, cv = 5, scoring = "neg_mean_squared_error")
+    print("DUMMY REGRESSOR" +"\n")
+    print("MSE mean: " +str(np.negative(scores.mean())))
+    print("MSE std: " +str(np.negative(scores.std()))+"\n\n")
 
 
-
+    #kernelised ridge regression varying gamma
+    kr_means, kr_stds = kernelridge_crossval_gamma(X,prices,gamma)
+    print("KernelRidge MODEL (VARY GAUSSIAN WEIGHTS):")
+    print("MSE mean:" + str(kr_means))
+    print("MSE standard dev:" + str(kr_stds) + "\n\n")
     # plt.rc('font', size=14)
     # plt.rcParams['figure.constrained_layout.use'] = True
     # plt.scatter(review_scores, prices, 1, color='red')
