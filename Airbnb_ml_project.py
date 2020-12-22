@@ -305,7 +305,10 @@ def main():
     knn_means, knn_stds = knn_crossval_n(xTrain,yTrain,n_neighbours)
     plot_error(n_neighbours, knn_means, knn_stds, 'grey', 'red', 'MSE of KNN (varying num neighbours)', 'number of neighbours', 'mean squared error')
 
-
+    #BASELINE - Dummy Regressor
+    dummy_model = DummyRegressor(strategy="mean")
+    scores = cross_val_score(dummy_model, xTrain, yTrain, cv = 5, scoring = "neg_mean_squared_error")
+    
 
 
     #print MSE mean and standard deviation of models (varying hyperparameters)
@@ -367,13 +370,9 @@ def main():
     print("n=100: " + str(knn_stds[4]))
     print("n=200: " + str(knn_stds[5]) + "\n\n")
 
-    
-    #BASELINE - Dummy Regressor
-    dummy_model = DummyRegressor(strategy="mean")
-    scores = cross_val_score(dummy_model, xTrain, yTrain, cv = 5, scoring = "neg_mean_squared_error")
     print("DUMMY REGRESSOR" +"\n")
     print("MSE mean: " +str(np.negative(scores.mean())))
-    print("MSE std: " +str(np.negative(scores.std()))+"\n\n")
+    print("MSE standard dev: " +str(np.negative(scores.std()))+"\n\n")
 
 
 
@@ -383,23 +382,10 @@ def main():
     ridge_mse = mean_squared_error(yTest, ypred)
     print("MSE of ridge model (c=0.01) over test data: " + str(np.mean(ridge_mse)))
 
-    lasso_model = Lasso().fit(xTrain, yTrain)
-    ypred = lasso_model.predict(xTest)
-    ridge_mse = mean_squared_error(yTest, ypred)
-    print("MSE of lasso model over test data: " + str(np.mean(ridge_mse)))
-
-    knn_model = KNeighborsRegressor(n_neighbors=25).fit(xTrain, yTrain)
-    ypred = knn_model.predict(xTest)
-    ridge_mse = mean_squared_error(yTest, ypred)
-    print("MSE of knn model (n=25) over test data: " + str(np.mean(ridge_mse)))
-
     dummy_model = DummyRegressor(strategy="mean").fit(xTrain, yTrain)
     dummy_ypred = dummy_model.predict(xTest)
     dummy_mse = mean_squared_error(yTest, dummy_ypred)
-    print("MSE of dummy model over test data: " + str(np.mean(dummy_mse)))
-
-    #print(ridge_model.coef_)
-    #print(ridge_model.intercept_)
+    print("MSE of dummy model over test data: " + str(np.mean(dummy_mse)) + "\n")
 
     signs = classify_feature_matrix(ridge_model,X)
 
