@@ -65,21 +65,6 @@ def featureCrossVal(features, target):
     scores = cross_val_score(model, features, target, cv = 10, scoring ="neg_mean_squared_error")
     return np.negative(scores.mean()),np.negative(scores.std())
 
-def linearRegCrossVal(features, target, q):
-    mean_arr = []
-    std_arr = []
-    for i in range(len(q)):
-        poly = PolynomialFeatures(q[i])
-        poly_mat = poly.fit_transform(features)
-        model = LinearRegression()
-        scores = cross_val_score(model, poly_mat, target, cv = 5, scoring= "neg_mean_squared_error")
-        mean_arr.append(np.negative(scores.mean()))
-        std_arr.append(np.negative(scores.std()))
-    print(mean_arr)
-    print(std_arr)
-    plt.errorbar(q, mean_arr, yerr = std_arr)
-    plt.show()
-
 def ridge_crossval_C(feature_matrix, target_vector, c_values):
     mean_arr = []
     std_arr = []
@@ -122,22 +107,6 @@ def knn_crossval_n(feature_matrix, target_vector, num_neighbours):
             std_arr.append(np.std(np.negative(scores)))
     return mean_arr, std_arr
 
-def knn_crossval_gamma(feature_matrix, target_vector, num_neighbours, gamma):
-    mean_arr = []
-    std_arr = []
-    for g in gamma:
-            model = KNeighborsRegressor(n_neighbors=num_neighbours, weights=partial(gaussian_kernel,g))
-            scores = cross_val_score(model, feature_matrix, target_vector, cv=5, scoring='neg_mean_squared_error')
-            mean_arr.append(np.mean(np.negative(scores)))
-            std_arr.append(np.std(np.negative(scores)))
-    return mean_arr, std_arr
-
-def gaussian_kernel(gamma, distances):
-    weights = np.exp(-gamma * (distances**2))
-    return weights/np.sum(weights)
-
-
-
 def LinReg(features, target, review_score, super_host, facilities):
     model = LinearRegression().fit(features, target)
 
@@ -164,6 +133,7 @@ def plot_error(cVals, mean, std, colors, lineColor, title, xLabel, yLabel):
     plt.title(title)
     plt.xlabel(xLabel)
     plt.ylabel(yLabel)
+    plt.show()
 
 def classify_feature_matrix(model,feature_matrix):
     return np.sign(model.intercept_ + (model.coef_[0,0]*feature_matrix[:,0]) + (model.coef_[0,1]*feature_matrix[:,1]) 
@@ -245,7 +215,6 @@ def main():
     bathrooms_pd = dublin_listings['bathrooms_text']
     bathrooms = np.array(bathrooms_pd)
     bathroom = np.array([0] * len(bathrooms_pd), dtype=float)
-    #print(bathrooms)
     for x in range(len(bathrooms_pd)):
        bathrooms[x] = re.findall(r'[\d.\d]+', str(bathrooms[x]))
        if not bathrooms[x]:
@@ -254,8 +223,9 @@ def main():
        bathroom[x] = bath
     normalise(bathroom)
 
-    #prices, review_scores, is_superhost, amenities = removeOutliers(prices, review_scores, is_superhost, amenities)
-
+    print("price: " +str(prices[2]) +"\nis_superhost: " +str(is_superhost[2]) +"\nreview_scores: " +str(review_scores[2])
+            +"\namenities: " +str(amenities[2]) +"\nbeds: " +str(beds[2]) +"\nbedrooms: " +str(bedrooms[2])
+                    +"\naccomodates: " +str(accommodates[2]) +"\nbathrooms: " +str(bathroom[2]) + "\n\n")
 
 
 
@@ -274,9 +244,12 @@ def main():
     X = np.column_stack((review_scores, is_superhost, amenities, beds, bedrooms, accommodates, bathroom))
     
 
-    xTrain, xTest, yTrain, yTest = train_test_split(X, prices, test_size = 0.2, random_state = 0)
-    #linearRegCrossVal(xTrain, yTrain, q)
+
+
     #LinReg(review_scores, prices, review_scores, is_superhost, amenities, fit)
+
+
+    #FEATURE SELECTION
     feature_mean_arr = []
     feature_std_arr = []
 
@@ -302,53 +275,98 @@ def main():
     feature_mean_arr.append(mean)
     feature_std_arr.append(std)
 
-    print(feature_mean_arr)
-    print(feature_std_arr)
+    #print(feature_mean_arr)
+    #print(feature_std_arr)
 
-    #plot_error(range(len(feature_mean_arr)), feature_mean_arr, feature_std_arr, 'red', 'grey', 'title', 'xlabel', 'ylabel')
-    #plt.show()
-
-    #linearRegCrossVal(X, prices, q)
 
     
 
+    #MODEL SELECTION
+
+    #create 80-20 train-test split
+    xTrain, xTest, yTrain, yTest = train_test_split(X, prices, test_size = 0.2, random_state = 0)
 
     #Ridge regression varying C
     c_values = [0.001, 0.01, 0.1, 1, 10, 100]
     ridge_means, ridge_stds = ridge_crossval_C(xTrain,yTrain,c_values)
+    plot_error(c_values, ridge_means, ridge_stds, 'grey', 'red', 'MSE of Ridge (varying C)', 'c value', 'mean squared error')
 
     #Ridge regression varying poly features
-    q_values = [2,3,4]
+    q_values = [1,2,3,4]
     ridge_q_means, ridge_q_stds = ridge_crossval_q(xTrain,yTrain,q_values)
+    plot_error(q_values, ridge_q_means, ridge_q_stds, 'grey', 'red', 'MSE of Ridge (varying q)', 'q value', 'mean squared error')
 
     #lasso regression varying C
     lasso_means, lasso_stds = lasso_crossval_C(xTrain,yTrain,c_values)
-
-
+    plot_error(c_values, lasso_means, lasso_stds, 'grey', 'red', 'MSE of Lasso (varying C)', 'c value', 'mean squared error')
 
     #knn regression varying number of neighbours and gaussian kernel weights
     n_neighbours = [2,5,10,25,50,100,200]
     knn_means, knn_stds = knn_crossval_n(xTrain,yTrain,n_neighbours)
+    plot_error(n_neighbours, knn_means, knn_stds, 'grey', 'red', 'MSE of KNN (varying num neighbours)', 'number of neighbours', 'mean squared error')
 
-    gamma = [0,1,5,10,25]
-    #knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(xTrain,yTrain,100,gamma)
 
-    #compare MSE mean and standard deviation of models
+
+
+    #print MSE mean and standard deviation of models (varying hyperparameters)
     print("RIDGE MODEL (vary c):")
-    print("MSE mean:" + str(ridge_means))
-    print("MSE standard dev:" + str(ridge_stds) + "\n\n")
+    print("MSE mean:")
+    print("c=0.001: "+ str(ridge_means[0]))
+    print("c=0.01: "+ str(ridge_means[1]))
+    print("c=0.1: "+ str(ridge_means[2]))
+    print("c=1: "+ str(ridge_means[3]))
+    print("c=10: "+ str(ridge_means[4]))
+    print("c=100: "+ str(ridge_means[5]) + "\n")
+    print("MSE standard dev:")
+    print("c=0.001: "+ str(ridge_stds[0]))
+    print("c=0.01: "+ str(ridge_stds[1]))
+    print("c=0.1: "+ str(ridge_stds[2]))
+    print("c=1: "+ str(ridge_stds[3]))
+    print("c=10: "+ str(ridge_stds[4]))
+    print("c=100: "+ str(ridge_stds[5]) + "\n\n")
+
     print("RIDGE MODEL (vary q):")
-    print("MSE mean:" + str(ridge_q_means))
-    print("MSE standard dev:" + str(ridge_q_stds) + "\n\n")
-    print("LASSO MODEL:")
-    print("MSE mean:" + str(lasso_means))
-    print("MSE standard dev:" + str(lasso_stds) + "\n\n")
+    print("MSE mean:")
+    print("q=2: " +  str(ridge_q_means[0]))
+    print("q=3: " +  str(ridge_q_means[1]))
+    print("q=4: " +  str(ridge_q_means[2]) + "\n")
+    print("MSE standard dev:")
+    print("q=2: " +  str(ridge_q_stds[0]))
+    print("q=3: " +  str(ridge_q_stds[1]))
+    print("q=4: " +  str(ridge_q_stds[2]) + "\n\n")
+
+    print("LASSO MODEL (vary c):")
+    print("MSE mean:")
+    print("c=0.001: "+ str(lasso_means[0]))
+    print("c=0.01: "+ str(lasso_means[1]))
+    print("c=0.1: "+ str(lasso_means[2]))
+    print("c=1: "+ str(lasso_means[3]))
+    print("c=10: "+ str(lasso_means[4]))
+    print("c=100: "+ str(lasso_means[5]) + "\n")
+    print("MSE standard dev:")
+    print("c=0.001: "+ str(ridge_stds[0]))
+    print("c=0.01: "+ str(ridge_stds[1]))
+    print("c=0.1: "+ str(ridge_stds[2]))
+    print("c=1: "+ str(ridge_stds[3]))
+    print("c=10: "+ str(ridge_stds[4]))
+    print("c=100: "+ str(ridge_stds[5]) + "\n\n")
+
     print("KNN MODEL (VARY NUM NEIGHBOURS):")
-    print("MSE mean:" + str(knn_means))
-    print("MSE standard dev:" + str(knn_stds) + "\n\n")
-    #print("KNN MODEL (VARY GAUSSIAN WEIGHTS):")
-    #print("MSE mean:" + str(knn_gamma_means))
-    #print("MSE standard dev:" + str(knn_gamma_stds) + "\n\n")
+    print("MSE mean:")
+    print("n=2: " + str(knn_means[0]))
+    print("n=5: " + str(knn_means[1]))
+    print("n=25: " + str(knn_means[2]))
+    print("n=50: " + str(knn_means[3]))
+    print("n=100: " + str(knn_means[4]))
+    print("n=200: " + str(knn_means[5]) + "\n")
+    print("MSE standard dev:")
+    print("n=2: " + str(knn_stds[0]))
+    print("n=5: " + str(knn_stds[1]))
+    print("n=25: " + str(knn_stds[2]))
+    print("n=50: " + str(knn_stds[3]))
+    print("n=100: " + str(knn_stds[4]))
+    print("n=200: " + str(knn_stds[5]) + "\n\n")
+
     
     #BASELINE - Dummy Regressor
     dummy_model = DummyRegressor(strategy="mean")
@@ -358,33 +376,35 @@ def main():
     print("MSE std: " +str(np.negative(scores.std()))+"\n\n")
 
 
+
     #PREDICTIONS USING TEST DATA
     ridge_model = Ridge(alpha = 1/(2*0.01)).fit(xTrain, yTrain)
     ypred = ridge_model.predict(xTest)
     ridge_mse = mean_squared_error(yTest, ypred)
-    print(np.mean(ridge_mse))
+    print("MSE of ridge model (c=0.01) over test data: " + str(np.mean(ridge_mse)))
+
+    lasso_model = Lasso().fit(xTrain, yTrain)
+    ypred = lasso_model.predict(xTest)
+    ridge_mse = mean_squared_error(yTest, ypred)
+    print("MSE of lasso model over test data: " + str(np.mean(ridge_mse)))
+
+    knn_model = KNeighborsRegressor(n_neighbors=25).fit(xTrain, yTrain)
+    ypred = knn_model.predict(xTest)
+    ridge_mse = mean_squared_error(yTest, ypred)
+    print("MSE of knn model (n=25) over test data: " + str(np.mean(ridge_mse)))
 
     dummy_model = DummyRegressor(strategy="mean").fit(xTrain, yTrain)
     dummy_ypred = dummy_model.predict(xTest)
     dummy_mse = mean_squared_error(yTest, dummy_ypred)
-    print(np.mean(dummy_mse))
+    print("MSE of dummy model over test data: " + str(np.mean(dummy_mse)))
 
-    print(ridge_model.coef_)
-    print(ridge_model.intercept_)
+    #print(ridge_model.coef_)
+    #print(ridge_model.intercept_)
 
     signs = classify_feature_matrix(ridge_model,X)
-    print(signs[:20])
 
 
 
-    # plt.rc('font', size=14)
-    # plt.rcParams['figure.constrained_layout.use'] = True
-    # plt.scatter(review_scores, prices, 1, color='red')
-
-    # plt.xlabel("price"); plt.ylabel("review score")
-    # #plt.legend(["class 1","class -1"], prop={'size' : 10})
-    # #plt.title("Dataset " + str(dataset_index) + " plot")
-    # plt.show()
 
 if __name__ == "__main__":
     main()
