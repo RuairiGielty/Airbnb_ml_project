@@ -392,6 +392,7 @@ def main():
 
     signs = classify_feature_matrix(ridge_model,X)
 
+    #combining features since they are all normalised to plot on 2-d scatterplot, them multiplication is applying weights to each of them. not sure if it does anything useful
     combine = (xTrain[:,0] *0.15) + (xTrain[:,1]*0.15) + (xTrain[:,2]*0.15) + (xTrain[:,3]*0.15) + (xTrain[:,4]*0.1)+ (xTrain[:,5] *0.1)+ (xTrain[:,6] *0.1)
     plt.scatter(combine, yTrain, s = 2**2)
     plt.show()
