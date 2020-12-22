@@ -21,6 +21,7 @@ from sklearn.metrics import roc_curve
 from sklearn.neighbors import KNeighborsRegressor
 from functools import partial
 from sklearn.dummy import DummyRegressor
+import re
 
 
 def normalise(list):
@@ -51,6 +52,13 @@ def set_review_scores_NaN(ratings):
         if ratings[j] == 0:
             ratings[j] = average
     return ratings
+
+def set_NaN_to_zero(vector):
+    mask = np.isnan(vector)
+    for i in range(len(mask)):
+        if mask[i] == True:
+            vector[i] = 0
+    return vector
 
 def featureCrossVal(features, target):
     model = LinearRegression().fit(features, target)
@@ -157,11 +165,14 @@ def plot_error(cVals, mean, std, colors, lineColor, title, xLabel, yLabel):
     plt.xlabel(xLabel)
     plt.ylabel(yLabel)
 
+def classify_feature_matrix(model,feature_matrix):
+    return np.sign(model.intercept_ + (model.coef_[0,0]*feature_matrix[:,0]) + (model.coef_[0,1]*feature_matrix[:,1]) 
+                   + (model.coef_[0,2]*feature_matrix[:,2]) + (model.coef_[0,3]*feature_matrix[:,3]) + (model.coef_[0,4]*feature_matrix[:,4])
+                   + (model.coef_[0,5]*feature_matrix[:,5]) + (model.coef_[0,6]*feature_matrix[:,6]))
+
 def main():
     q = np.array([1,2,3,4])
-    lists = np.array([1, 2, 3, 4])
-    feature_mean_arr = np.array([0] * 4)
-    feature_std_arr = np.array([0] * 4)
+    
     #dublin_listings = np.genfromtxt("C:/Users/ruair/Documents/4thYear/ml/assignments/group_assignment/datasets/airbnb/dublin_listings.csv",delimiter=',')
     dublin_listings = pd.read_csv("dublin_listings.csv",delimiter=',')
 
@@ -175,7 +186,7 @@ def main():
     prices = prices[:,np.newaxis]
     prices = prices.astype(np.float32)
     normalise(prices)
-    print(prices)
+
     #host_is_superhost string column to numpy array of bools
     is_superhost = dublin_listings['host_is_superhost'].to_numpy()
     is_superhost[is_superhost == 't'] = 1
@@ -206,52 +217,101 @@ def main():
     amenities = amenities.astype(np.float32)
     normalise(amenities)
 
-    #putting all features in a column stack.
-    review_superhost_augment = review_scores
-    review_superhost_augment[np.logical_not(is_superhost.astype(int))] -= 20
+    #bed count to numpy array
+    beds = dublin_listings['beds'].to_numpy()
+    np.reshape(beds,(-1,1))
+    beds = beds[:,np.newaxis]
+    beds = set_NaN_to_zero(beds)
+    beds = beds.astype(np.float32)
+    normalise(beds)
+
+    #bedroom count to numpy array
+    bedrooms = dublin_listings['bedrooms'].to_numpy()
+    np.reshape(bedrooms,(-1,1))
+    bedrooms = bedrooms[:,np.newaxis]
+    bedrooms = set_NaN_to_zero(bedrooms)
+    bedrooms = bedrooms.astype(np.float32)
+    normalise(bedrooms)
+
+    #accomodates count to numpy array
+    accommodates = dublin_listings['accommodates'].to_numpy()
+    np.reshape(accommodates,(-1,1))
+    accommodates = accommodates[:,np.newaxis]
+    accommodates = set_NaN_to_zero(accommodates)
+    accommodates = accommodates.astype(np.float32)
+    normalise(accommodates)
+
+    #bathroom count to numpy array
+    bathrooms_pd = dublin_listings['bathrooms_text']
+    bathrooms = np.array(bathrooms_pd)
+    bathroom = np.array([0] * len(bathrooms_pd), dtype=float)
+    #print(bathrooms)
+    for x in range(len(bathrooms_pd)):
+       bathrooms[x] = re.findall(r'[\d.\d]+', str(bathrooms[x]))
+       if not bathrooms[x]:
+           bathrooms[x] = '1'
+       [bath] = bathrooms[x]
+       bathroom[x] = bath
+    normalise(bathroom)
 
     #prices, review_scores, is_superhost, amenities = removeOutliers(prices, review_scores, is_superhost, amenities)
 
 
 
-    #CREATE DIFFERENT COMBINATIONS OF FEATURES
 
-    #review_scores + is_superhost
-    rs_and_is = np.column_stack((review_scores, is_superhost))
-    #review_scores + amenities
-    rs_and_am = np.column_stack((review_scores, amenities))
-    #all three
-    X = np.column_stack((review_scores, is_superhost, amenities))
+    #CREATE DIFFERENT COMBINATIONS OF FEATURES   
+    review_scores + is_superhost
+    features_2 = np.column_stack((review_scores, is_superhost))
+    #review_scores + is_superhost + amenities
+    features_3 = np.column_stack((review_scores, is_superhost, amenities))
+    #review_scores + is_superhost + amenities + beds
+    features_4 = np.column_stack((review_scores, is_superhost, amenities, beds))
+    #review_scores + is_superhost + amenities + beds + bedrooms
+    features_5 = np.column_stack((review_scores, is_superhost, amenities, beds, bedrooms))
+    #review_scores + is_superhost + amenities + beds + bedrooms + accomodates
+    features_6 = np.column_stack((review_scores, is_superhost, amenities, beds, bedrooms, accommodates))
+    #all features
+    X = np.column_stack((review_scores, is_superhost, amenities, beds, bedrooms, accommodates, bathroom))
     
-
-    augment = np.column_stack((review_superhost_augment,amenities))
-    
-
 
     xTrain, xTest, yTrain, yTest = train_test_split(X, prices, test_size = 0.2, random_state = 0)
     #linearRegCrossVal(xTrain, yTrain, q)
     #LinReg(review_scores, prices, review_scores, is_superhost, amenities, fit)
+    feature_mean_arr = []
+    feature_std_arr = []
+
     mean, std = featureCrossVal(review_scores, prices)
-    feature_mean_arr[0] = mean
-    feature_std_arr[0] = std
-    mean, std = featureCrossVal(rs_and_is, prices)
-    feature_mean_arr[1] = mean
-    feature_std_arr[1] = std
-    mean, std = featureCrossVal(rs_and_am, prices)
-    feature_mean_arr[2] = mean
-    feature_std_arr[2] = std
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
+    mean, std = featureCrossVal(features_2, prices)
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
+    mean, std = featureCrossVal(features_3, prices)
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
+    mean, std = featureCrossVal(features_4, prices)
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
+    mean, std = featureCrossVal(features_5, prices)
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
+    mean, std = featureCrossVal(features_6, prices)
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
     mean, std = featureCrossVal(X, prices)
-    feature_mean_arr[3] = mean
-    feature_std_arr[3] = std
+    feature_mean_arr.append(mean)
+    feature_std_arr.append(std)
 
-    plot_error(lists, feature_mean_arr, feature_std_arr, 'red', 'grey', 'title', 'xlabel', 'ylabel')
-    plt.show()
+    print(feature_mean_arr)
+    print(feature_std_arr)
 
-    linearRegCrossVal(X, prices, q)
+    #plot_error(range(len(feature_mean_arr)), feature_mean_arr, feature_std_arr, 'red', 'grey', 'title', 'xlabel', 'ylabel')
+    #plt.show()
+
+    #linearRegCrossVal(X, prices, q)
 
     
 
-    #use review_scores, is_superhost, amenities as features
 
     #Ridge regression varying C
     c_values = [0.001, 0.01, 0.1, 1, 10, 100]
@@ -271,7 +331,7 @@ def main():
     knn_means, knn_stds = knn_crossval_n(xTrain,yTrain,n_neighbours)
 
     gamma = [0,1,5,10,25]
-    knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(xTrain,yTrain,100,gamma)
+    #knn_gamma_means, knn_gamma_stds = knn_crossval_gamma(xTrain,yTrain,100,gamma)
 
     #compare MSE mean and standard deviation of models
     print("RIDGE MODEL (vary c):")
@@ -286,9 +346,9 @@ def main():
     print("KNN MODEL (VARY NUM NEIGHBOURS):")
     print("MSE mean:" + str(knn_means))
     print("MSE standard dev:" + str(knn_stds) + "\n\n")
-    print("KNN MODEL (VARY GAUSSIAN WEIGHTS):")
-    print("MSE mean:" + str(knn_gamma_means))
-    print("MSE standard dev:" + str(knn_gamma_stds) + "\n\n")
+    #print("KNN MODEL (VARY GAUSSIAN WEIGHTS):")
+    #print("MSE mean:" + str(knn_gamma_means))
+    #print("MSE standard dev:" + str(knn_gamma_stds) + "\n\n")
     
     #BASELINE - Dummy Regressor
     dummy_model = DummyRegressor(strategy="mean")
@@ -309,7 +369,11 @@ def main():
     dummy_mse = mean_squared_error(yTest, dummy_ypred)
     print(np.mean(dummy_mse))
 
+    print(ridge_model.coef_)
+    print(ridge_model.intercept_)
 
+    signs = classify_feature_matrix(ridge_model,X)
+    print(signs[:20])
 
 
 
