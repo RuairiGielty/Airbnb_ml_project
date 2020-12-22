@@ -392,7 +392,9 @@ def main():
 
     signs = classify_feature_matrix(ridge_model,X)
 
-
+    combine = (xTrain[:,0] *0.15) + (xTrain[:,1]*0.15) + (xTrain[:,2]*0.15) + (xTrain[:,3]*0.15) + (xTrain[:,4]*0.1)+ (xTrain[:,5] *0.1)+ (xTrain[:,6] *0.1)
+    plt.scatter(combine, yTrain, s = 2**2)
+    plt.show()
 
 
 if __name__ == "__main__":
