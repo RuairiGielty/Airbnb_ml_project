@@ -133,6 +133,9 @@ def plot_error(cVals, mean, std, colors, lineColor, title, xLabel, yLabel):
     plt.title(title)
     plt.xlabel(xLabel)
     plt.ylabel(yLabel)
+    leg_point0 = plt.Rectangle((0,0), 1, 1, fc = colors)
+    leg_point1 = plt.Rectangle((0,0), 1,1 , fc = lineColor)
+    plt.legend([leg_point0,leg_point1], ["Standard Deviation", "MSE mean"])   
     plt.show()
 
 def classify_feature_matrix(model,feature_matrix):
